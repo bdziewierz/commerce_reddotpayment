@@ -30,6 +30,7 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
    */
   public function defaultConfiguration() {
     return [
+      'merchant_id' => '',
       'secret_key' => '',
     ] + parent::defaultConfiguration();
   }
@@ -39,6 +40,14 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
+
+    $form['merchant_id'] = [
+      '#type' => 'textfield',
+      '#required' => TRUE,
+      '#title' => $this->t('Merchant ID'),
+      '#description' => $this->t('Red Dot Payment Merchant ID given to you when registering for RDP account.'),
+      '#default_value' => $this->configuration['merchant_id'],
+    ];
 
     $form['secret_key'] = [
       '#type' => 'textfield',
@@ -56,8 +65,9 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
    */
   public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
     parent::submitConfigurationForm($form, $form_state);
-    if (!$form_staqte->getErrors()) {
+    if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
+      $this->configuration['merchant_id'] = $values['merchant_id'];
       $this->configuration['secret_key'] = $values['secret_key'];
     }
   }

@@ -20,15 +20,13 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
 
     /** @var \Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayInterface $payment_gateway_plugin */
     $payment_gateway_plugin = $payment->getPaymentGateway()->getPlugin();
-    $redirect_method = $payment_gateway_plugin->getConfiguration()['redirect_method'];
-    $remove_js = ($redirect_method == 'post_manual');
+    $config = $payment_gateway_plugin->getConfiguration();
 
-    // Gateways that use the GET redirect method usually perform an API call
-    // that prepares the remote payment and provides the actual url to
-    // redirect to. Any params received from that API call that need to be
-    // persisted until later payment creation can be saved in $order->data.
-    // Example: $order->setData('my_gateway', ['test' => '123']), followed
-    // by an $order->save().
+    // Determine correct endpoint
+    $rdp_endpoint = 'https://secure.reddotpayment.com/service/payment-api';
+    if ($config['mode'] == 'test') {
+      $rdp_endpoint = 'https://secure-dev.reddotpayment.com/service/payment-api';
+    }
 
     $order = $payment->getOrder();
     // Simulate an API call failing and throwing an exception, for test purposes.
@@ -44,11 +42,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
       'total' => $payment->getAmount()->getNumber(),
     ];
 
-    $form = $this->buildRedirectForm($form, $form_state, $redirect_url, $data, $redirect_method);
-    if ($remove_js) {
-      // Disable the javascript that auto-clicks the Submit button.
-      unset($form['#attached']['library']);
-    }
+    $form = $this->buildRedirectForm($form, $form_state, $redirect_url, $data);
 
     return $form;
   }
