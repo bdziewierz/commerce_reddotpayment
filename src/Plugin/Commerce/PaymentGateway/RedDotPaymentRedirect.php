@@ -95,6 +95,35 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
 
   }
 
+  /**
+   * @param $secret_key
+   * @param $params
+   * @return string
+   */
+  static public function signGeneric($secret_key, $params) {
+    unset($params['signature']);
 
+    $data_to_sign = "";
+    self::recursiveGenericArraySign($params, $data_to_sign);
+    $data_to_sign .= $secret_key;
+
+    return hash('sha512', $data_to_sign);
+  }
+
+  /**
+   * @param $params
+   * @param $data_to_sign
+   */
+  static public function recursiveGenericArraySign(&$params, &$data_to_sign) {
+    ksort($params);
+    foreach ($params as $v) {
+      if (is_array($v)) {
+        self::recursiveGenericArraySign($v, $data_to_sign);
+      }
+      else {
+        $data_to_sign .= $v;
+      }
+    }
+  }
 
 }

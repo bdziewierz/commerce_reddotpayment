@@ -4,6 +4,7 @@ namespace Drupal\commerce_reddotpayment\PluginForm\OffsiteRedirect;
 
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm as BasePaymentOffsiteForm;
+use Drupal\commerce_reddotpayment\Plugin\Commerce\PaymentGateway\RedDotPaymentRedirect;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
 
@@ -47,7 +48,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
       'mid' => $config['merchant_id'],
       'api_mode' => 'redirection_hosted',
       'payment_type' => 'S', // TODO: Make configurable, please
-      'order_id' => $order->getOrderNumber(),
+      'order_id' => $order->id(),
       'store_code' => $order->getStoreId(),
       'ccy' => $order->getTotalPrice()->getCurrencyCode(),
       'amount' => $order->getTotalPrice()->getNumber(), // TODO: Handle IDR correctly, please as per "...IDR (Indonesia Rupiah) Should be sent without digits behind comma"
@@ -85,19 +86,49 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     $aggregated_fields .= $config['secret_key'];
     $request_fields['signature'] = hash('sha512', $aggregated_fields);
 
-    // TODO: Call a service
+    // Call a service
+    $http = \Drupal::httpClient()
+      ->post($rdp_endpoint, [
+        'auth' => ['admin', 'admin'],
+        'body' => json_encode($request_fields),
+        'http_errors' => FALSE,
+        'headers' => [
+          'Content-Type' => 'application/json',
+        ],
+      ]);
+    $body = $http->getBody()->getContents();
+    $response = json_decode($body, TRUE);
 
     // TODO: Set up payment, please. Add remote ID from transaction.
 
-    $redirect_url = Url::fromRoute('commerce_reddotpayment.redirect_302', [], ['absolute' => TRUE])->toString();
-    $data = [
-      'return' => $form['#return_url'],
-      'cancel' => $form['#cancel_url'],
-      'total' => $payment->getAmount()->getNumber(),
-    ];
-    $form = $this->buildRedirectForm($form, $form_state, $redirect_url, $data);
+    // Handle successful transaction
+    if ($response['response_code'] == 0) {
 
-    return $form;
+      // Calculate signature using sign generic function
+      $calculated_signature = RedDotPaymentRedirect::signGeneric($config['secret_key'], $response);
+
+      // Validate the received transaction signature
+      if ($calculated_signature == $response['signature']) {
+        if (empty($response['payment_url'])) {
+
+          // Empty payment URL in succesful txn (should not happen)
+          throw new PaymentGatewayException('Invalid response, no payment_url');
+        }
+      }
+      else {
+
+        // Invalid signature, the response might not come from RDP
+        throw new PaymentGatewayException('Invalid signature!');
+      }
+    }
+
+    // Handle unsuccessful transaction
+    else {
+      throw new PaymentGatewayException('Invalid request: ' . $response['response_msg']);
+    }
+
+    // TODO: Handle delayed transaction result = -01
+
+    return $this->buildRedirectForm($form, $form_state, $response['payment_url'], array());
   }
-
 }
