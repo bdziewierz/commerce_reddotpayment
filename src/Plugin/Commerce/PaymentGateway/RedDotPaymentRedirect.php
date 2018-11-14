@@ -30,7 +30,7 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
    */
   public function defaultConfiguration() {
     return [
-      'redirect_method' => 'post',
+      'secret_key' => '',
     ] + parent::defaultConfiguration();
   }
 
@@ -40,17 +40,12 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
 
-    // A real gateway would always know which redirect method should be used,
-    // it's made configurable here for test purposes.
-    $form['redirect_method'] = [
-      '#type' => 'radios',
-      '#title' => $this->t('Redirect method'),
-      '#options' => [
-        'get' => $this->t('Redirect via GET (302 header)'),
-        'post' => $this->t('Redirect via POST (automatic)'),
-        'post_manual' => $this->t('Redirect via POST (manual)'),
-      ],
-      '#default_value' => $this->configuration['redirect_method'],
+    $form['secret_key'] = [
+      '#type' => 'textfield',
+      '#required' => TRUE,
+      '#title' => $this->t('Secret key'),
+      '#description' => $this->t('Red Dot Payment secret key given to you when registering for RDP account.'),
+      '#default_value' => $this->configuration['secret_key'],
     ];
 
     return $form;
@@ -61,9 +56,9 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
    */
   public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
     parent::submitConfigurationForm($form, $form_state);
-    if (!$form_state->getErrors()) {
+    if (!$form_staqte->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
-      $this->configuration['redirect_method'] = $values['redirect_method'];
+      $this->configuration['secret_key'] = $values['secret_key'];
     }
   }
 

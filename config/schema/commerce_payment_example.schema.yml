@@ -1,6 +1,6 @@
-commerce_payment.commerce_payment_gateway.plugin.reddotpayment_redirect:
+commerce_payment.commerce_payment_gateway.plugin.reddotpayment_key:
   type: commerce_payment_gateway_configuration
   mapping:
-    redirect_method:
+    secret_key:
       type: string
-      label: 'Redirect method'
+      label: 'Secret key'
