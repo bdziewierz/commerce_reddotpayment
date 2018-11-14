@@ -75,18 +75,26 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
   /**
    * {@inheritdoc}
    */
-  public function onReturn(OrderInterface $order, Request $request) {
-    // @todo Add examples of request validation.
-    $payment_storage = $this->entityTypeManager->getStorage('commerce_payment');
-    $payment = $payment_storage->create([
-      'state' => 'authorization',
-      'amount' => $order->getBalance(),
-      'payment_gateway' => $this->entityId,
-      'order_id' => $order->id(),
-      'remote_id' => $request->query->get('txn_id'),
-      'remote_state' => $request->query->get('payment_status'),
-    ]);
-    $payment->save();
+  public function onCancel(OrderInterface $order, Request $request) {
+    parent::onCancel($order, $request);
   }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function onNotify(Request $request) {
+    parent::onNotify($request);
+
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function onReturn(OrderInterface $order, Request $request) {
+    parent::onReturn($order, $request);
+
+  }
+
+
 
 }
