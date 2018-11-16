@@ -2,6 +2,7 @@
 
 namespace Drupal\commerce_reddotpayment\PluginForm\OffsiteRedirect;
 
+use Drupal\commerce_payment\Exception\InvalidResponseException;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PluginForm\PaymentOffsiteForm as BasePaymentOffsiteForm;
 use Drupal\commerce_reddotpayment\Plugin\Commerce\PaymentGateway\RedDotPaymentRedirect;
@@ -19,7 +20,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     /** @var \Drupal\commerce_payment\Entity\PaymentInterface $payment */
     $payment = $this->entity;
 
-    /** @var \Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OffsitePaymentGatewayInterface $payment_gateway_plugin */
+    /** @var \Drupal\commerce_reddotpayment\Plugin\Commerce\PaymentGateway\RedDotPaymentRedirect $payment_gateway_plugin */
     $payment_gateway_plugin = $payment->getPaymentGateway()->getPlugin();
     $config = $payment_gateway_plugin->getConfiguration();
     $order = $payment->getOrder();
@@ -39,10 +40,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     }
 
     // Determine correct endpoint
-    $rdp_endpoint = 'https://secure.reddotpayment.com/service/payment-api';
-    if ($config['mode'] == 'test') {
-      $rdp_endpoint = 'https://secure-dev.reddotpayment.com/service/payment-api';
-    }
+    $rdp_endpoint = $payment_gateway_plugin->getPaymentAPIEndpoint();
 
     // Prepare the first phase request array
     $request = array(
@@ -78,7 +76,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     );
 
     // Create request signature.
-    $request['signature'] = RedDotPaymentRedirect::signRequest($config['secret_key'], $request);
+    $request['signature'] = RedDotPaymentRedirect::signFirstPhase($config['secret_key'], $request);
 
     // Call a service
     $http = \Drupal::httpClient()
@@ -92,35 +90,31 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     $body = $http->getBody()->getContents();
     $response = json_decode($body, TRUE);
 
-    // TODO: Set up payment, please. Add remote ID from transaction.
-
-    // Handle successful transaction
-    if ($response['response_code'] == 0) {
-
-      // Calculate signature using sign generic function
-      $calculated_signature = RedDotPaymentRedirect::signResponse($config['secret_key'], $response);
-
-      // Validate the received transaction signature
-      if ($calculated_signature == $response['signature']) {
-        if (empty($response['payment_url'])) {
-
-          // Empty payment URL in successful txn (should not happen)
-          throw new PaymentGatewayException('Invalid response, no payment_url');
-        }
-      }
-      else {
-
-        // Invalid signature, the response might not come from RDP
-        throw new PaymentGatewayException('Invalid signature!');
-      }
+    // Validate response code
+    if (empty($response['signature'])) {
+      throw new InvalidResponseException('No signature returned by the response.');
+    }
+    $calculated_signature = RedDotPaymentRedirect::signGeneric($config['secret_key'], $response);
+    if ($calculated_signature != $response['signature']) {
+      throw new InvalidResponseException('Invalid signature!');
     }
 
-    // Handle unsuccessful transaction
-    else {
-      throw new PaymentGatewayException('Invalid request: ' . $response['response_msg']);
+    // Validate response code
+    if (!isset($response['response_code'])) {
+      throw new InvalidResponseException('No response code.');
+    }
+    if ($response['response_code'] != 0) {
+      throw new InvalidResponseException('Invalid request: ' . $response['response_msg']);
     }
 
-    // TODO: Handle delayed transaction result = -01
+    // Validate payment URL
+    if (empty($response['payment_url'])) {
+      throw new InvalidResponseException('Invalid response, no payment_url');
+    }
+
+    // Associated payment with the transaction.
+    $payment->setRemoteId($response['transaction_id']);
+    $payment->save();
 
     return $this->buildRedirectForm($form, $form_state, $response['payment_url'], array());
   }
