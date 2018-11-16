@@ -1,4 +1,4 @@
-commerce_payment.commerce_payment_gateway.plugin.reddotpayment_key:
+commerce_payment.commerce_payment_gateway.plugin.reddotpayment_redirect:
   type: commerce_payment_gateway_configuration
   mapping:
     merchant_id:
