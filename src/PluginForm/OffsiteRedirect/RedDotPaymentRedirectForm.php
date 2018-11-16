@@ -42,6 +42,11 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     // Determine correct endpoint
     $rdp_endpoint = $payment_gateway_plugin->getPaymentAPIEndpoint();
 
+    // Format amount
+    $amount = $order->getTotalPrice()->getCurrencyCode() == 'IDR'
+      ? floor($order->getTotalPrice()->getNumber())  // Indonesian Rupiah should be sent without digits behind comma
+      : sprintf('%0.2f', $order->getTotalPrice()->getNumber());
+
     // Prepare the first phase request array
     $request = array(
       'mid' => $config['merchant_id'],
@@ -50,7 +55,7 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
       'order_id' => $order->id(),
       'store_code' => $order->getStoreId(),
       'ccy' => $order->getTotalPrice()->getCurrencyCode(),
-      'amount' => sprintf('%0.2f', $order->getTotalPrice()->getNumber()), // TODO: Handle IDR correctly, please as per "...IDR (Indonesia Rupiah) Should be sent without digits behind comma"
+      'amount' => $amount,
       'multiple_method_page' => '1', // TODO: Make configurable, please
       'back_url' => $form['#cancel_url'],
       'redirect_url' => $form['#return_url'],
