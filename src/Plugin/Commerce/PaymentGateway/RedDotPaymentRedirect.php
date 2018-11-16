@@ -96,11 +96,30 @@ class RedDotPaymentRedirect extends OffsitePaymentGatewayBase {
   }
 
   /**
+   * Create request signature.
+   *
    * @param $secret_key
    * @param $params
    * @return string
    */
-  static public function signGeneric($secret_key, $params) {
+  static public function signRequest($secret_key, $params) {
+    $fields_for_signature = array('mid', 'order_id', 'payment_type', 'amount', 'ccy');
+
+    $aggregated_fields = "";
+    foreach ($fields_for_signature as $f) {
+      $aggregated_fields .= trim($params[$f]);
+    }
+    $aggregated_fields .= $secret_key;
+
+    return hash('sha512', $aggregated_fields);
+  }
+
+  /**
+   * @param $secret_key
+   * @param $params
+   * @return string
+   */
+  static public function signResponse($secret_key, $params) {
     unset($params['signature']);
 
     $data_to_sign = "";

@@ -28,11 +28,12 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     /** @var \Drupal\address\AddressInterface $billing_address */
     $billing_address = $order->getBillingProfile()->get('address')->first();
 
-    // Basic validation steps
+    // Validate merchant_id
     if (empty($config['merchant_id'])) {
       throw new PaymentGatewayException('Merchant ID not provided.');
     }
 
+    // Validate secret_key
     if (empty($config['secret_key'])) {
       throw new PaymentGatewayException('Client secret not provided.');
     }
@@ -43,21 +44,20 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
       $rdp_endpoint = 'https://secure-dev.reddotpayment.com/service/payment-api';
     }
 
-    // Prepare the first phase request object
-    $request_fields = array(
+    // Prepare the first phase request array
+    $request = array(
       'mid' => $config['merchant_id'],
       'api_mode' => 'redirection_hosted',
       'payment_type' => 'S', // TODO: Make configurable, please
       'order_id' => $order->id(),
       'store_code' => $order->getStoreId(),
       'ccy' => $order->getTotalPrice()->getCurrencyCode(),
-      'amount' => $order->getTotalPrice()->getNumber(), // TODO: Handle IDR correctly, please as per "...IDR (Indonesia Rupiah) Should be sent without digits behind comma"
+      'amount' => sprintf('%0.2f', $order->getTotalPrice()->getNumber()), // TODO: Handle IDR correctly, please as per "...IDR (Indonesia Rupiah) Should be sent without digits behind comma"
       'multiple_method_page' => '1', // TODO: Make configurable, please
       'back_url' => $form['#cancel_url'],
       'redirect_url' => $form['#return_url'],
       'notify_url' => $payment_gateway_plugin->getNotifyUrl()->toString(),
       'locale' => in_array($current_language->getId(), array('en', 'id', 'es', 'fr', 'de')) ? $current_language->getId() : 'en',
-      'payer_id' => $order->getEmail(),
       'payer_email' => $order->getEmail(),
       'bill_to_forename' => $billing_address->getGivenName(),
       'bill_to_surname' => $billing_address->getFamilyName(),
@@ -78,19 +78,12 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     );
 
     // Create request signature.
-    $fields_for_signature = array('mid', 'order_id', 'payment_type', 'amount', 'ccy', 'payer_id');
-    $aggregated_fields = "";
-    foreach ($fields_for_signature as $f) {
-      $aggregated_fields .= trim($request_fields[$f]);
-    }
-    $aggregated_fields .= $config['secret_key'];
-    $request_fields['signature'] = hash('sha512', $aggregated_fields);
+    $request['signature'] = RedDotPaymentRedirect::signRequest($config['secret_key'], $request);
 
     // Call a service
     $http = \Drupal::httpClient()
       ->post($rdp_endpoint, [
-        'auth' => ['admin', 'admin'],
-        'body' => json_encode($request_fields),
+        'body' => json_encode($request),
         'http_errors' => FALSE,
         'headers' => [
           'Content-Type' => 'application/json',
@@ -105,13 +98,13 @@ class RedDotPaymentRedirectForm extends BasePaymentOffsiteForm {
     if ($response['response_code'] == 0) {
 
       // Calculate signature using sign generic function
-      $calculated_signature = RedDotPaymentRedirect::signGeneric($config['secret_key'], $response);
+      $calculated_signature = RedDotPaymentRedirect::signResponse($config['secret_key'], $response);
 
       // Validate the received transaction signature
       if ($calculated_signature == $response['signature']) {
         if (empty($response['payment_url'])) {
 
-          // Empty payment URL in succesful txn (should not happen)
+          // Empty payment URL in successful txn (should not happen)
           throw new PaymentGatewayException('Invalid response, no payment_url');
         }
       }
